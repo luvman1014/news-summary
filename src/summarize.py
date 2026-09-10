@@ -122,16 +122,10 @@ def prepare_digest(items: list[RawItem]) -> dict:
 def summarize(
     items: list[RawItem],
     api_key: str | None = None,
-    model: str = "nvidia/nemotron-3-ultra-550b-a55b:free",
+    model: str = "google/gemini-2.0-flash-001",
     language: str = "zh",
 ) -> str:
-    """调用 Kimi 生成总结。
-
-    先通过 prepare_digest() 整理成 JSON，再送给 Kimi，
-    让 LLM 只做「读 JSON → 写文章」一件事，数据与生成解耦。
-
-    language: "zh"（中文）| "en"（英文）| "bilingual"（中英双语交错）
-    """
+    """调用 OpenRouter 生成总结。"""
     if not items:
         no_content = {"zh": "暂无新内容。", "en": "No new content.", "bilingual": "暂无新内容。/ No new content."}
         return no_content.get(language, "暂无新内容。")
@@ -169,7 +163,7 @@ def summarize(
     try:
         return _call_api(content)
     except RateLimitError as e:
-        print(f"[Kimi fallback] 三次重试后仍 429，返回占位符。原始错误: {e}")
+        print(f"[OpenRouter fallback] 三次重试后仍 429，返回占位符。原始错误: {e}")
         fallback = {
             "zh": "今日摘要生成失败：API 负载过高，请稍后重试。",
             "en": "Summary generation failed: API engine overloaded. Please try again later.",
@@ -179,7 +173,6 @@ def summarize(
     except BadRequestError as e:
         if "content_filter" not in str(e) and "high risk" not in str(e):
             raise
-        # Full batch blocked — retry source-by-source, skipping blocked ones
         print("[警告] 全量内容被内容过滤器拦截，尝试按来源逐一重试...")
         by_source = {}
         for item in items:
@@ -200,7 +193,6 @@ def summarize(
                 else:
                     raise
             except RateLimitError:
-                # If rate limited mid-bisect, include the source optimistically
                 passed_items.extend(source_items)
 
         if not passed_items:
