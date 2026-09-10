@@ -141,10 +141,10 @@ def summarize(
 
     system_prompt = _PROMPTS.get(language, _PROMPTS["zh"])
 
-client = OpenAI(
-    api_key=api_key,
-    base_url="https://openrouter.ai/api/v1",
-)
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://openrouter.ai/api/v1",
+    )
 
     def _call_api(payload: str) -> str:
         for attempt in range(3):
@@ -159,7 +159,7 @@ client = OpenAI(
                 )
                 return response.choices[0].message.content
             except RateLimitError as e:
-                print(f"[Kimi 429] attempt {attempt + 1}/3: {e}")
+                print(f"[OpenRouter 429] attempt {attempt + 1}/3: {e}")
                 if attempt < 2:
                     time.sleep(30 * (attempt + 1))
                     continue
