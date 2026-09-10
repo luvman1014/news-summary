@@ -124,7 +124,7 @@ def prepare_digest(items: list[RawItem]) -> dict:
 def summarize(
     items: list[RawItem],
     api_key: str | None = None,
-    model: str = "google/gemini-2.0-flash-001",
+    model: str = "nvidia/nemotron-3-ultra-550b-a55b:free",
     language: str = "zh",
 ) -> str:
     """调用 OpenRouter 生成总结。"""
