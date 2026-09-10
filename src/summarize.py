@@ -122,7 +122,7 @@ def prepare_digest(items: list[RawItem]) -> dict:
 def summarize(
     items: list[RawItem],
     api_key: str | None = None,
-    model: str = "moonshot-v1-128k",
+    model: str = "nvidia/nemotron-3-ultra-550b-a55b:free",
     language: str = "zh",
 ) -> str:
     """调用 Kimi 生成总结。
@@ -141,7 +141,10 @@ def summarize(
 
     system_prompt = _PROMPTS.get(language, _PROMPTS["zh"])
 
-    client = OpenAI(api_key=api_key, base_url="https://api.moonshot.cn/v1")
+client = OpenAI(
+    api_key=api_key,
+    base_url="https://openrouter.ai/api/v1",
+)
 
     def _call_api(payload: str) -> str:
         for attempt in range(3):
