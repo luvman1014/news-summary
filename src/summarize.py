@@ -1,9 +1,9 @@
-"""使用 Claude 对抓取的内容进行总结
+"""使用 Claude / OpenRouter 对抓取的内容进行总结
 
 架构说明（参考 follow-builders 的设计）：
-  - prepare_digest()：纯数据整理，输出结构化 JSON，不调用 LLM
-  - summarize()：将 JSON 送给 Claude 生成可读摘要
-  两步分离，便于调试和复用。
+- prepare_digest()：纯数据整理，输出结构化 JSON，不调用 LLM
+- summarize()：将 JSON 送给 Claude 生成可读摘要
+两步分离，便于调试和复用。
 """
 
 import json
@@ -51,6 +51,7 @@ _PROMPT_BASE = """
 
 _PROMPTS = {
     "zh": f"""你是一个 AI 领域信息助手。我会给你一段 JSON，包含从多个来源抓取的最新内容。
+
 请全程使用中文输出，技术词汇（AI、LLM、API、RAG、token、agent 等）保留英文原文，人名和产品名保留英文。
 
 ## 输出结构
@@ -62,8 +63,8 @@ _PROMPTS = {
 按来源逐一展开，每个来源单独一节，标题写来源名称。
 
 {_PROMPT_BASE}""",
-
     "en": f"""You are an AI industry digest assistant. I will give you a JSON containing the latest content fetched from multiple sources.
+
 Output entirely in English.
 
 ## Output Structure
@@ -75,8 +76,8 @@ Pick the 5 most important items across all sources, ranked by importance. Each i
 Go through each source one by one, with its name as a section heading.
 
 {_PROMPT_BASE}""",
-
     "bilingual": f"""You are an AI industry digest assistant. I will give you a JSON containing the latest content fetched from multiple sources.
+
 Output in bilingual format: Chinese and English interleaved paragraph by paragraph.
 
 Rules:
@@ -116,6 +117,7 @@ def prepare_digest(items: list[RawItem]) -> dict:
         if item.published:
             entry["published"] = item.published
         groups.setdefault(item.source_type, []).append(entry)
+
     return {"sources": groups, "total_items": len(items)}
 
 
@@ -127,12 +129,15 @@ def summarize(
 ) -> str:
     """调用 OpenRouter 生成总结。"""
     if not items:
-        no_content = {"zh": "暂无新内容。", "en": "No new content.", "bilingual": "暂无新内容。/ No new content."}
+        no_content = {
+            "zh": "暂无新内容。",
+            "en": "No new content.",
+            "bilingual": "暂无新内容。/ No new content.",
+        }
         return no_content.get(language, "暂无新内容。")
 
     digest = prepare_digest(items)
     content = json.dumps(digest, ensure_ascii=False, indent=2)
-
     system_prompt = _PROMPTS.get(language, _PROMPTS["zh"])
 
     client = OpenAI(
@@ -173,6 +178,7 @@ def summarize(
     except BadRequestError as e:
         if "content_filter" not in str(e) and "high risk" not in str(e):
             raise
+
         print("[警告] 全量内容被内容过滤器拦截，尝试按来源逐一重试...")
         by_source = {}
         for item in items:
@@ -180,6 +186,7 @@ def summarize(
 
         passed_items: list[RawItem] = []
         skipped_sources: list[str] = []
+
         for source_name, source_items in by_source.items():
             test_digest = prepare_digest(source_items)
             test_content = json.dumps(test_digest, ensure_ascii=False, indent=2)
@@ -193,7 +200,7 @@ def summarize(
                 else:
                     raise
             except RateLimitError:
-                passed_items.extend(source_items)
+                print(f"[警告] 測試来源 {source_name} 時觸發 Rate Limit，跳過此來源。")
 
         if not passed_items:
             fallback = {
@@ -206,7 +213,9 @@ def summarize(
         clean_digest = prepare_digest(passed_items)
         clean_content = json.dumps(clean_digest, ensure_ascii=False, indent=2)
         result = _call_api(clean_content)
+
         if skipped_sources:
             note = "\n\n---\n⚠️ 以下来源因内容过滤被跳过：" + "、".join(skipped_sources)
             result += note
+
         return result
